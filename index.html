@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuickBite Food Delivery</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        // Set theme on initial load
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark')
+        } else {
+            document.documentElement.classList.remove('dark')
+        }
+    </script>
+    <script>
+      // Explicitly tell Tailwind to use the 'class' strategy for dark mode.
+      tailwind.config = {
+        darkMode: 'class',
+      }
+    </script>
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+        }
+        .food-card { 
+            transition: all 0.3s ease; 
+        }
+        .food-card:hover { 
+            transform: translateY(-5px) scale(1.03);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); 
+        }
+        .modal-backdrop { background-color: rgba(0, 0, 0, 0.5); }
+        .modal-content { 
+            max-height: 90vh;
+            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+            transform: scale(0.9);
+            opacity: 0;
+        }
+        .modal-visible .modal-content {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .category-btn.active { background-color: #F97316; color: white; border-color: #F97316; }
+        .dark .category-btn.active { background-color: #F97316; border-color: #F97316; }
+        
+        @keyframes pulse {
+            50% { opacity: .5; }
+        }
+        .skeleton-card {
+            background-color: #e5e7eb;
+            border-radius: 0.5rem;
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .dark .skeleton-card { background-color: #374151; }
+
+        .toast {
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        }
+
+        .auth-bg {
+            background-image: url('https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=2070&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+        }
+        
+        .hero-bg {
+            background-image: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?q=80&w=1981&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+        }
+
+        /* Loader Animation */
+        .loader-spinner {
+            border: 4px solid #f3f3f3; /* Light grey */
+            border-top: 4px solid #F97316; /* Orange */
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        .dark .loader-spinner { border: 4px solid #4b5563; border-top: 4px solid #F97316; }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Fly to cart animation */
+        .fly-to-cart-img {
+            position: fixed;
+            z-index: 100;
+            border-radius: 50%;
+            transition: all 1s ease;
+            object-fit: cover;
+        }
+
+        /* Staggered fade-in animation */
+        .fade-in-card {
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Order Progress Bar */
+        .progress-bar {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+            margin-bottom: 1rem;
+        }
+        .progress-bar::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background-color: #e5e7eb;
+            transform: translateY(-50%);
+            z-index: 1;
+        }
+        .dark .progress-bar::before { background-color: #4b5563; }
+        .progress-indicator {
+             position: absolute;
+            top: 50%;
+            left: 0;
+            height: 2px;
+            background-color: #F97316;
+            transform: translateY(-50%);
+            z-index: 2;
+            transition: width 0.5s ease;
+        }
+        .progress-step {
+            position: relative;
+            z-index: 3;
+            text-align: center;
+        }
+        .progress-dot {
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+            background-color: #e5e7eb;
+            margin: 0 auto 0.5rem;
+            transition: background-color 0.5s ease;
+        }
+        .dark .progress-dot { background-color: #4b5563; }
+        .progress-step.active .progress-dot {
+            background-color: #F97316;
+        }
+
+        /* Star Rating */
+        .star-rating label {
+            cursor: pointer;
+            color: #d1d5db; /* gray-300 */
+        }
+        .dark .star-rating label {
+            color: #4b5563; /* gray-600 */
+        }
+        .star-rating input:checked ~ label,
+        .star-rating:not(:checked) > label:hover,
+        .star-rating:not(:checked) > label:hover ~ label {
+            color: #f59e0b; /* amber-500 */
+        }
+        .star-rating input {
+            display: none;
+        }
+
+        /* 2D Cart Animation */
+        #cart-sidebar {
+            transition: transform 0.3s ease-in-out;
+        }
+
+        /* Order Details Toggle */
+        .order-details {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900">
+
+    <!-- Fullscreen Loader -->
+    <div id="loader" class="fixed inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col justify-center items-center hidden">
+        <div class="loader-spinner"></div>
+        <p class="mt-4 text-gray-600 dark:text-gray-300 text-lg">Loading your experience...</p>
+    </div>
+
+    <!-- Auth Page -->
+    <div id="auth-page" class="min-h-screen">
+       <div class="grid md:grid-cols-2 h-screen">
+            <div class="auth-bg hidden md:block"></div>
+            <div class="flex flex-col justify-center items-center bg-white dark:bg-gray-900 p-8">
+                <div class="w-full max-w-sm">
+                    <div id="login-form">
+                        <div class="flex justify-center mb-6 items-center">
+                            <div class="bg-orange-600 p-3 rounded-full">
+                                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </div>
+                        </div>
+                        <h2 class="text-3xl font-extrabold text-center text-gray-900 dark:text-white">Welcome Back!</h2>
+                        <p class="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">Please sign in to your account</p>
+                        <form class="mt-8 space-y-6" onsubmit="event.preventDefault(); handleLogin();">
+                            <div id="login-error" class="hidden p-3 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800"></div>
+                            <div class="rounded-md shadow-sm -space-y-px">
+                                <div>
+                                    <input id="login-email" type="email" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 rounded-t-md focus:outline-none focus:ring-orange-500 focus:border-orange-500" placeholder="Email address">
+                                </div>
+                                <div>
+                                    <input id="login-password" type="password" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 rounded-b-md focus:outline-none focus:ring-orange-500 focus:border-orange-500" placeholder="Password">
+                                </div>
+                            </div>
+                             <div class="text-sm text-right">
+                                <a href="#" id="show-forgot-password" class="font-medium text-orange-600 hover:text-orange-500"> Forgot your password? </a>
+                            </div>
+                            <button type="submit" class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                                Sign in
+                            </button>
+                        </form>
+                        <p class="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
+                            Don't have an account? <a href="#" id="show-signup" class="font-medium text-orange-600 hover:text-orange-500">Sign up</a>
+                        </p>
+                    </div>
+
+                    <div id="signup-form" class="hidden">
+                        <div class="flex justify-center mb-6 items-center">
+                            <div class="bg-orange-600 p-3 rounded-full">
+                                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </div>
+                        </div>
+                        <h2 class="text-3xl font-extrabold text-center text-gray-900 dark:text-white">Create an Account</h2>
+                         <p class="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">Get started with our delicious food!</p>
+                        <form class="mt-8 space-y-6" onsubmit="event.preventDefault(); handleSignup();">
+                             <div id="signup-error" class="hidden p-3 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800"></div>
+                             <input id="signup-name" type="text" required placeholder="Full Name" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-orange-500 focus:border-orange-500">
+                             <input id="signup-email" type="email" required placeholder="Email Address" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-orange-500 focus:border-orange-500">
+                             <input id="signup-password" type="password" required placeholder="Password (min. 6 characters)" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-orange-500 focus:border-orange-500">
+                            <button type="submit" class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                                Sign up
+                            </button>
+                        </form>
+                         <p class="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
+                            Already have an account? <a href="#" id="show-login" class="font-medium text-orange-600 hover:text-orange-500">Login</a>
+                        </p>
+                    </div>
+
+                     <div id="forgot-password-form" class="hidden">
+                         <div class="flex justify-center mb-6 items-center">
+                            <div class="bg-orange-600 p-3 rounded-full">
+                                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </div>
+                        </div>
+                        <h2 class="text-3xl font-extrabold text-center text-gray-900 dark:text-white">Reset Password</h2>
+                         <p class="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">Enter your email to receive a reset link.</p>
+                        <form class="mt-8 space-y-6" onsubmit="event.preventDefault(); handlePasswordReset();">
+                            <input id="reset-email" type="email" required class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-orange-500 focus:border-orange-500" placeholder="Email address">
+                            <button type="submit" class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                                Send Reset Link
+                            </button>
+                        </form>
+                         <p class="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
+                            Remembered your password? <a href="#" id="back-to-login" class="font-medium text-orange-600 hover:text-orange-500">Login</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+       </div>
+    </div>
+
+    <!-- Main App Page -->
+    <div id="app-page" class="hidden">
+        <!-- Header -->
+        <header class="bg-white dark:bg-gray-800 shadow-md sticky top-0 z-20">
+            <nav class="container mx-auto px-6 py-3 flex justify-between items-center">
+                <a href="#" class="flex items-center space-x-2">
+                    <div class="bg-orange-600 p-2 rounded-full">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <span class="text-2xl font-bold text-gray-800 dark:text-white">QuickBite</span>
+                </a>
+                <div class="hidden md:flex items-center space-x-6">
+                     <a href="#" id="nav-home" class="text-gray-600 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-500">Home</a>
+                     <a href="#" id="nav-orders" class="text-gray-600 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-500">My Orders</a>
+                     <a href="#" id="nav-profile" class="text-gray-600 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-500">Profile</a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="theme-toggle" class="text-gray-600 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-500 focus:outline-none">
+                        <svg id="theme-icon-sun" class="h-6 w-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                        <svg id="theme-icon-moon" class="h-6 w-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                    </button>
+                    <button id="cart-button" class="relative text-gray-600 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-500 focus:outline-none">
+                        <svg class="h-6 w-6" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                        <span id="cart-count" class="absolute -top-2 -right-2 bg-orange-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">0</span>
+                    </button>
+                    <button id="logout-button" class="bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700">Logout</button>
+                </div>
+            </nav>
+        </header>
+
+        <!-- Main Content Area -->
+        <div id="main-content">
+             <!-- Home Section -->
+            <main id="home-section">
+                <!-- Upgraded Hero Section -->
+                <div class="hero-bg py-32 text-white text-center">
+                    <div class="container mx-auto px-6">
+                        <h1 class="text-4xl md:text-5xl font-extrabold mb-4">Your next meal is just a click away.</h1>
+                        <p class="text-lg text-gray-300 mb-8 max-w-2xl mx-auto">The best meals from the best restaurants, straight to your door. Fresh, fast, and delicious.</p>
+                        <div class="mt-4 max-w-2xl mx-auto">
+                            <input type="text" id="search-bar" placeholder="Search for your favorite food..." class="w-full px-6 py-4 border border-transparent text-gray-800 dark:text-gray-800 rounded-full focus:outline-none focus:ring-4 focus:ring-orange-500 focus:ring-opacity-50 transition">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="container mx-auto p-6">
+                    <!-- Category Filters (now separate from search) -->
+                    <div class="my-8">
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-4 text-center">Browse by Category</h2>
+                        <div id="category-filters" class="flex flex-wrap gap-3 justify-center">
+                            <!-- Category buttons will be injected here -->
+                        </div>
+                    </div>
+
+                    <!-- Food Items Grid -->
+                    <div id="food-items-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+                        <!-- Food items will be injected here by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- "Why Choose Us?" Section -->
+                <section class="py-16 bg-white dark:bg-gray-800 mt-12">
+                    <div class="container mx-auto px-6 text-center">
+                        <h2 class="text-3xl font-bold text-gray-800 dark:text-white mb-12">Why QuickBite?</h2>
+                        <div class="grid md:grid-cols-3 gap-12">
+                            <div class="flex flex-col items-center">
+                                <div class="bg-orange-100 dark:bg-gray-700 p-4 rounded-full mb-4">
+                                    <svg class="w-12 h-12 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                </div>
+                                <h3 class="text-xl font-semibold dark:text-white mb-2">Lightning-Fast Delivery</h3>
+                                <p class="text-gray-600 dark:text-gray-400">Get your food delivered in under 30 minutes, piping hot and ready to eat.</p>
+                            </div>
+                            <div class="flex flex-col items-center">
+                                <div class="bg-orange-100 dark:bg-gray-700 p-4 rounded-full mb-4">
+                                     <svg class="w-12 h-12 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                </div>
+                                <h3 class="text-xl font-semibold dark:text-white mb-2">Quality Ingredients</h3>
+                                <p class="text-gray-600 dark:text-gray-400">We partner with top restaurants that use only the freshest, highest-quality ingredients.</p>
+                            </div>
+                            <div class="flex flex-col items-center">
+                                 <div class="bg-orange-100 dark:bg-gray-700 p-4 rounded-full mb-4">
+                                    <svg class="w-12 h-12 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                </div>
+                                <h3 class="text-xl font-semibold dark:text-white mb-2">Endless Variety</h3>
+                                <p class="text-gray-600 dark:text-gray-400">From local favorites to international cuisines, find exactly what you're craving.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+
+            <!-- Orders Section -->
+            <section id="orders-section" class="hidden container mx-auto p-6">
+                 <h1 class="text-3xl font-bold text-gray-800 dark:text-white my-8 text-center">Your Order History</h1>
+                 <div id="orders-list" class="space-y-6 max-w-4xl mx-auto">
+                    <!-- Order history will be injected here -->
+                 </div>
+                 <div id="orders-empty" class="hidden text-center py-16">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                        <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                    </svg>
+                    <h3 class="mt-2 text-lg font-medium text-gray-900 dark:text-white">No orders yet</h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">You haven't placed any orders yet. Start shopping to see your history here.</p>
+                    <div class="mt-6">
+                        <button id="shop-now-btn" type="button" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                            Shop Now
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Profile Section -->
+             <section id="profile-section" class="hidden container mx-auto p-6">
+                <div class="max-w-4xl mx-auto">
+                    <h1 class="text-3xl font-bold text-gray-800 dark:text-white my-8">My Profile</h1>
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden md:grid md:grid-cols-3">
+                        <div class="md:col-span-1 p-8 bg-gray-50 dark:bg-gray-700 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r dark:border-gray-600">
+                             <div class="w-24 h-24 bg-orange-100 dark:bg-gray-600 rounded-full flex items-center justify-center mb-4">
+                                 <svg class="w-12 h-12 text-orange-500 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                             </div>
+                             <h2 id="profile-display-name" class="text-2xl font-bold text-gray-800 dark:text-white text-center">User Name</h2>
+                             <p id="profile-member-since" class="text-sm text-gray-500 dark:text-gray-400 mt-1">Member since...</p>
+                        </div>
+                        <div class="md:col-span-2 p-8">
+                             <h3 class="text-xl font-semibold mb-6 dark:text-white">Account Information</h3>
+                             <form id="profile-form" onsubmit="event.preventDefault(); handleProfileUpdate();">
+                                <div class="space-y-6">
+                                    <div>
+                                        <label for="profile-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Full Name</label>
+                                        <input type="text" id="profile-name" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 dark:text-white">
+                                    </div>
+                                     <div>
+                                        <label for="profile-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email Address</label>
+                                        <input type="email" id="profile-email" disabled class="mt-1 block w-full px-3 py-2 bg-gray-100 dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded-md shadow-sm dark:text-gray-400">
+                                    </div>
+                                     <div>
+                                        <label for="profile-address" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Delivery Address</label>
+                                        <textarea id="profile-address" rows="3" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 dark:text-white" placeholder="123 Main St, Anytown..."></textarea>
+                                    </div>
+                                    <div>
+                                        <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                                            Save Changes
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Footer -->
+        <footer class="bg-gray-100 dark:bg-gray-800 border-t dark:border-gray-700 py-8 px-6 text-center text-gray-600 dark:text-gray-400">
+            <p class="font-semibold">&copy; 2025 QuickBite. All Rights Reserved.</p>
+        </footer>
+
+    </div>
+
+    <!-- Cart Sidebar -->
+    <div id="cart-sidebar" class="fixed top-0 right-0 h-full w-full md:w-96 bg-white dark:bg-gray-800 shadow-lg transform translate-x-full transition-transform duration-300 ease-in-out z-30">
+        <div class="p-6 flex flex-col h-full">
+            <div class="flex justify-between items-center border-b dark:border-gray-700 pb-4 mb-4">
+                <h2 class="text-2xl font-bold dark:text-white">Your Cart</h2>
+                <button id="close-cart" class="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-3xl">&times;</button>
+            </div>
+            <div id="cart-items" class="flex-grow overflow-y-auto -mr-6 pr-6">
+                <!-- Cart items will be injected here -->
+            </div>
+            <div class="border-t dark:border-gray-700 pt-4">
+                <div class="flex justify-between font-bold text-lg dark:text-white">
+                    <span>Total</span>
+                    <span id="cart-total">₹0.00</span>
+                </div>
+                <button id="checkout-btn" class="w-full mt-4 bg-orange-600 text-white py-3 rounded-md hover:bg-orange-700 disabled:bg-gray-400">Checkout</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Item Detail Modal -->
+    <div id="item-detail-modal" class="fixed inset-0 z-40 hidden items-center justify-center p-4 modal-backdrop">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg overflow-hidden modal-content">
+             <div id="modal-content-body" class="overflow-y-auto">
+                <!-- Modal content will be injected here -->
+             </div>
+        </div>
+    </div>
+    
+    <!-- Toast Notification -->
+    <div id="toast-notification" class="toast fixed bottom-5 right-5 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 z-50">
+        <!-- Message here -->
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            createUserWithEmailAndPassword, 
+            signInWithEmailAndPassword, 
+            onAuthStateChanged, 
+            signOut,
+            sendPasswordResetEmail
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            setDoc, 
+            getDoc,
+            updateDoc,
+            collection,
+            addDoc,
+            query,
+            where,
+            onSnapshot,
+            serverTimestamp
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAU519AuDJ_IQGNjK2lrMGkqYNEfibhXrg",
+            authDomain: "food-delivery-website-110c2.firebaseapp.com",
+            projectId: "food-delivery-website-110c2",
+            storageBucket: "food-delivery-website-110c2.appspot.com",
+            messagingSenderId: "115706642736",
+            appId: "1:115706642736:web:40162d3da9d1eee08d88f5"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let currentUser = null;
+        let cart = [];
+        let ordersUnsubscribe = null;
+
+        let foodItems = [
+            { id: 9, name: 'Chicken Biryani', price: 420, image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?q=80&w=1974&auto=format&fit=crop', description: 'Aromatic basmati rice cooked with chicken and exotic spices.', category: 'Biryani' },
+            { id: 7, name: 'Bacon Burger', price: 350, image: 'https://images.unsplash.com/photo-1607013251379-e6eecfffe234?q=80&w=1935&auto=format&fit=crop', description: 'Beef patty topped with crispy bacon and melted cheddar.', category: 'Burger' },
+            { id: 3, name: 'Cheeseburger', price: 300, image: 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?q=80&w=2072&auto=format&fit=crop', description: 'Juicy beef patty with cheese, lettuce, tomato, and onion on a sesame seed bun.', category: 'Burger' },
+            { id: 11, name: 'Veg Hakka Noodles', price: 260, image: 'https://images.unsplash.com/photo-1585032226651-759b368d7246?q=80&w=1892&auto=format&fit=crop', description: 'Stir-fried noodles with a variety of fresh vegetables.', category: 'Chinese' },
+            { id: 8, name: 'Chocolate Lava Cake', price: 180, image: 'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?q=80&w=1950&auto=format&fit=crop', description: 'Warm chocolate cake with a gooey molten center.', category: 'Dessert' },
+            { id: 12, name: 'Butter Chicken', price: 480, image: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?q=80&w=1964&auto=format&fit=crop', description: 'Tender chicken in a rich, creamy tomato and butter sauce.', category: 'Indian' },
+            { id: 13, name: 'Garlic Naan', price: 90, image: 'https://images.unsplash.com/photo-1631452180515-99d9d3b0178a?q=80&w=1974&auto=format&fit=crop', description: 'Soft Indian flatbread topped with garlic and butter.', category: 'Indian' },
+            { id: 4, name: 'Spaghetti Carbonara', price: 400, image: 'https://images.unsplash.com/photo-1612874742237-6526221588e3?q=80&w=2070&auto=format&fit=crop', description: 'Pasta with eggs, cheese, pancetta, and black pepper.', category: 'Pasta' },
+            { id: 1, name: 'Margherita Pizza', price: 350, image: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?q=80&w=2070&auto=format&fit=crop', description: 'Classic pizza with tomato, mozzarella, and basil.', category: 'Pizza' },
+            { id: 5, name: 'Pepperoni Pizza', price: 450, image: 'https://images.unsplash.com/photo-1534308983496-4fabb1a015ee?q=80&w=2076&auto=format&fit=crop', description: 'A classic favorite with spicy pepperoni and mozzarella.', category: 'Pizza' },
+            { id: 2, name: 'Caesar Salad', price: 250, image: 'https://images.unsplash.com/photo-1550304943-4f24f54ddde9?q=80&w=2070&auto=format&fit=crop', description: 'Crisp romaine lettuce with Caesar dressing, croutons, and parmesan cheese.', category: 'Salad' },
+            { id: 6, name: 'Greek Salad', price: 280, image: 'https://images.unsplash.com/photo-1592417817038-d13fd7342605?q=80&w=2070&auto=format&fit=crop', description: 'Tomatoes, cucumbers, onion, feta cheese, and olives.', category: 'Salad' },
+            { id: 14, name: 'Samosa (2 pcs)', price: 120, image: 'https://images.unsplash.com/photo-1601050690597-df0568f70b50?q=80&w=2070&auto=format&fit=crop', description: 'Crispy pastry filled with spiced potatoes and peas.', category: 'Snacks' },
+            { id: 10, name: 'Paneer Tikka Wrap', price: 220, image: 'https://images.unsplash.com/photo-1625167191638-349f6356396c?q=80&w=1974&auto=format&fit=crop', description: 'Grilled cottage cheese with veggies and mint chutney in a soft wrap.', category: 'Wraps' }
+        ];
+
+        // --- UI ELEMENTS ---
+        const authPage = document.getElementById('auth-page');
+        const appPage = document.getElementById('app-page');
+        const loginForm = document.getElementById('login-form');
+        const signupForm = document.getElementById('signup-form');
+        const forgotPasswordForm = document.getElementById('forgot-password-form');
+        const loader = document.getElementById('loader');
+
+        // --- THEME TOGGLE ---
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const sunIcon = document.getElementById('theme-icon-sun');
+        const moonIcon = document.getElementById('theme-icon-moon');
+
+        const updateThemeIcons = () => {
+            if (document.documentElement.classList.contains('dark')) {
+                sunIcon.classList.remove('hidden');
+                moonIcon.classList.add('hidden');
+            } else {
+                sunIcon.classList.add('hidden');
+                moonIcon.classList.remove('hidden');
+            }
+        };
+
+        themeToggleBtn.addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+            if (document.documentElement.classList.contains('dark')) {
+                localStorage.theme = 'dark';
+            } else {
+                localStorage.theme = 'light';
+            }
+            updateThemeIcons();
+        });
+        
+        // Initial icon state
+        updateThemeIcons();
+
+        // --- AUTH NAVIGATION ---
+        function showForm(formToShow) {
+            [loginForm, signupForm, forgotPasswordForm].forEach(form => form.classList.add('hidden'));
+            formToShow.classList.remove('hidden');
+        }
+        document.getElementById('show-signup').addEventListener('click', (e) => { e.preventDefault(); showForm(signupForm); });
+        document.getElementById('show-login').addEventListener('click', (e) => { e.preventDefault(); showForm(loginForm); });
+        document.getElementById('show-forgot-password').addEventListener('click', (e) => { e.preventDefault(); showForm(forgotPasswordForm); });
+        document.getElementById('back-to-login').addEventListener('click', (e) => { e.preventDefault(); showForm(loginForm); });
+
+        // --- AUTH LOGIC ---
+        const handleLogin = async () => {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const errorDiv = document.getElementById('login-error');
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                errorDiv.classList.add('hidden');
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.classList.remove('hidden');
+            }
+        };
+
+        const handleSignup = async () => {
+            const name = document.getElementById('signup-name').value;
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            const errorDiv = document.getElementById('signup-error');
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+                // Create user profile in Firestore
+                await setDoc(doc(db, "users", user.uid), {
+                    name: name,
+                    email: user.email,
+                    address: ""
+                });
+                errorDiv.classList.add('hidden');
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.classList.remove('hidden');
+            }
+        };
+
+        const handlePasswordReset = async () => {
+            const email = document.getElementById('reset-email').value;
+            try {
+                await sendPasswordResetEmail(auth, email);
+                showToast('Password reset link sent! Check your inbox.');
+                showForm(loginForm);
+            } catch (error) {
+                showToast(error.message, true);
+            }
+        };
+
+        document.getElementById('logout-button').addEventListener('click', () => {
+            if (ordersUnsubscribe) {
+                ordersUnsubscribe();
+            }
+            signOut(auth);
+        });
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUser = user;
+                
+                loader.classList.remove('hidden');
+                
+                await loadCartFromFirestore();
+                populateCategories();
+
+                setTimeout(() => {
+                    authPage.style.display = 'none';
+                    appPage.classList.remove('hidden');
+                    
+                    renderSkeletonLoaders('food-items-grid', foodItems.length);
+
+                    setTimeout(() => {
+                        renderFoodItems(foodItems);
+                    }, 500);
+
+                    loader.classList.add('hidden');
+                }, 1500);
+
+            } else {
+                currentUser = null;
+                authPage.style.display = 'block';
+                appPage.classList.add('hidden');
+                loader.classList.add('hidden');
+                cart = [];
+                updateCartUI();
+            }
+        });
+
+        // --- CART LOGIC ---
+        const cartButton = document.getElementById('cart-button');
+        const cartSidebar = document.getElementById('cart-sidebar');
+        const closeCartButton = document.getElementById('close-cart');
+
+        cartButton.addEventListener('click', () => cartSidebar.classList.remove('translate-x-full'));
+        closeCartButton.addEventListener('click', () => cartSidebar.classList.add('translate-x-full'));
+
+        async function saveCartToFirestore() {
+             if (currentUser) {
+                const userCartRef = doc(db, 'carts', currentUser.uid);
+                await setDoc(userCartRef, { items: cart });
+            }
+        }
+        async function loadCartFromFirestore() {
+            if (currentUser) {
+                const userCartRef = doc(db, 'carts', currentUser.uid);
+                const docSnap = await getDoc(userCartRef);
+                if (docSnap.exists()) {
+                    cart = docSnap.data().items;
+                } else {
+                    cart = [];
+                }
+                updateCartUI();
+            }
+        }
+        
+        const addToCart = (itemId, event) => {
+            const item = foodItems.find(i => i.id === itemId);
+            const cartItem = cart.find(i => i.id === itemId);
+
+            // Fly to cart animation
+            if(event) {
+                const card = event.target.closest('.food-card, .modal-content');
+                if (card) {
+                    const imgToFly = card.querySelector('img');
+                    const startRect = imgToFly.getBoundingClientRect();
+                    const cartBtnRect = cartButton.getBoundingClientRect();
+
+                    const flyImg = document.createElement('img');
+                    flyImg.src = imgToFly.src;
+                    flyImg.className = 'fly-to-cart-img';
+                    flyImg.style.left = `${startRect.left}px`;
+                    flyImg.style.top = `${startRect.top}px`;
+                    flyImg.style.width = `${startRect.width}px`;
+                    flyImg.style.height = `${startRect.height}px`;
+
+                    document.body.appendChild(flyImg);
+                    
+                    requestAnimationFrame(() => {
+                        flyImg.style.left = `${cartBtnRect.left + cartBtnRect.width / 2}px`;
+                        flyImg.style.top = `${cartBtnRect.top + cartBtnRect.height / 2}px`;
+                        flyImg.style.width = '0px';
+                        flyImg.style.height = '0px';
+                        flyImg.style.transform = 'rotate(360deg)';
+                    });
+
+                    setTimeout(() => {
+                        flyImg.remove();
+                    }, 1000);
+                }
+            }
+
+
+            if (cartItem) {
+                cartItem.quantity++;
+            } else {
+                cart.push({ ...item, quantity: 1 });
+            }
+            showToast(`${item.name} added to cart!`);
+            updateCartUI();
+            saveCartToFirestore();
+        }
+
+        const decreaseCartItem = (itemId) => {
+            const cartItem = cart.find(i => i.id === itemId);
+            if (cartItem.quantity > 1) {
+                cartItem.quantity--;
+            } else {
+                cart = cart.filter(i => i.id !== itemId);
+            }
+            updateCartUI();
+            saveCartToFirestore();
+        }
+
+        const removeCartItem = (itemId) => {
+            cart = cart.filter(i => i.id !== itemId);
+            updateCartUI();
+            saveCartToFirestore();
+        }
+
+        function updateCartUI() {
+            const cartItemsContainer = document.getElementById('cart-items');
+            const cartCount = document.getElementById('cart-count');
+            const cartTotal = document.getElementById('cart-total');
+            const checkoutBtn = document.getElementById('checkout-btn');
+
+            cartItemsContainer.innerHTML = '';
+            let total = 0;
+            let count = 0;
+
+            if (cart.length === 0) {
+                cartItemsContainer.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-10">Your cart is empty.</p>';
+                checkoutBtn.disabled = true;
+            } else {
+                 cart.forEach(item => {
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'flex items-center py-2 space-x-3';
+                    itemEl.innerHTML = `
+                        <img src="${item.image}" alt="${item.name}" class="w-16 h-16 object-cover rounded-md">
+                        <div class="flex-grow">
+                            <p class="font-semibold text-sm dark:text-white">${item.name}</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">₹${item.price.toFixed(2)}</p>
+                             <div class="flex items-center mt-1">
+                                <button onclick="handleDecreaseItem(${item.id})" class="text-gray-500 dark:text-gray-300 w-6 h-6 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">-</button>
+                                <span class="px-2 text-sm dark:text-gray-300">${item.quantity}</span>
+                                <button onclick="handleIncreaseItem(${item.id}, event)" class="text-gray-500 dark:text-gray-300 w-6 h-6 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">+</button>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                           <p class="font-semibold dark:text-white">₹${(item.price * item.quantity).toFixed(2)}</p>
+                           <button onclick="handleRemoveItem(${item.id})" class="text-xs text-red-500 hover:underline">Remove</button>
+                        </div>
+                    `;
+                    cartItemsContainer.appendChild(itemEl);
+                    total += item.price * item.quantity;
+                    count += item.quantity;
+                });
+                checkoutBtn.disabled = false;
+            }
+           
+            cartCount.textContent = count;
+            cartTotal.textContent = `₹${total.toFixed(2)}`;
+        }
+
+        // --- FOOD ITEMS & FILTERING LOGIC ---
+        function renderFoodItems(items) {
+            const grid = document.getElementById('food-items-grid');
+            grid.innerHTML = '';
+            items.forEach((item, index) => {
+                const card = document.createElement('div');
+                card.className = 'food-card bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden fade-in-card cursor-pointer';
+                card.style.animationDelay = `${index * 50}ms`;
+
+                card.innerHTML = `
+                    <div class="relative group overflow-hidden">
+                        <img src="${item.image}" alt="${item.name}" class="w-full h-48 object-cover group-hover:scale-110 transition-transform duration-300">
+                        <div class="absolute inset-0 bg-black bg-opacity-20"></div>
+                        <span class="absolute top-3 left-3 bg-orange-500 text-white text-xs font-semibold px-2 py-1 rounded-full">${item.category}</span>
+                    </div>
+                    <div class="p-4 flex flex-col flex-grow">
+                        <h3 class="text-lg font-semibold dark:text-white truncate">${item.name}</h3>
+                        <p class="text-gray-500 dark:text-gray-400 text-sm mt-1 flex-grow">${item.description.substring(0, 50)}...</p>
+                        <div class="flex justify-between items-center mt-4">
+                            <span class="text-xl font-bold text-gray-800 dark:text-gray-100">₹${item.price.toFixed(2)}</span>
+                            <button data-item-id="${item.id}" class="add-to-cart-btn bg-orange-100 dark:bg-gray-700 text-orange-600 dark:text-orange-400 w-10 h-10 rounded-full flex items-center justify-center shadow-md hover:bg-orange-500 hover:text-white dark:hover:bg-orange-600 transition-colors">
+                                <svg class="w-6 h-6 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                card.addEventListener('click', (e) => {
+                    if (e.target.closest('.add-to-cart-btn')) {
+                        addToCart(item.id, e);
+                    } else {
+                        showItemDetail(item.id);
+                    }
+                });
+
+                grid.appendChild(card);
+            });
+        }
+        
+        function populateCategories() {
+            const filtersContainer = document.getElementById('category-filters');
+            const categories = ['All', ...new Set(foodItems.map(item => item.category))];
+            filtersContainer.innerHTML = '';
+            categories.forEach(category => {
+                const btn = document.createElement('button');
+                btn.textContent = category;
+                btn.className = 'category-btn px-4 py-2 border dark:border-gray-600 rounded-md text-sm font-medium hover:bg-orange-500 hover:text-white dark:text-gray-300 dark:hover:bg-orange-600 dark:hover:text-white';
+                if(category === 'All') btn.classList.add('active');
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    filterItems();
+                });
+                filtersContainer.appendChild(btn);
+            });
+        }
+        function filterItems() {
+             const searchTerm = document.getElementById('search-bar').value.toLowerCase();
+             const activeCategory = document.querySelector('.category-btn.active').textContent;
+             
+             let filtered = foodItems;
+             
+             if (activeCategory !== 'All') {
+                filtered = filtered.filter(item => item.category === activeCategory);
+             }
+             
+             if (searchTerm) {
+                filtered = filtered.filter(item => item.name.toLowerCase().includes(searchTerm));
+             }
+             
+             renderFoodItems(filtered);
+        }
+        document.getElementById('search-bar').addEventListener('input', filterItems);
+
+        // --- NAVIGATION LOGIC ---
+        const homeSection = document.getElementById('home-section');
+        const ordersSection = document.getElementById('orders-section');
+        const profileSection = document.getElementById('profile-section');
+        const navHome = document.getElementById('nav-home');
+        const navOrders = document.getElementById('nav-orders');
+        const navProfile = document.getElementById('nav-profile');
+        const shopNowBtn = document.getElementById('shop-now-btn');
+
+        function showSection(sectionToShow) {
+            if (ordersUnsubscribe) {
+                ordersUnsubscribe();
+                ordersUnsubscribe = null;
+            }
+            [homeSection, ordersSection, profileSection].forEach(section => section.classList.add('hidden'));
+            sectionToShow.classList.remove('hidden');
+        }
+
+        navHome.addEventListener('click', (e) => { e.preventDefault(); showSection(homeSection); });
+        navOrders.addEventListener('click', (e) => { e.preventDefault(); showSection(ordersSection); listenToOrders(); });
+        navProfile.addEventListener('click', (e) => { e.preventDefault(); showSection(profileSection); loadUserProfile(); });
+        shopNowBtn.addEventListener('click', (e) => { e.preventDefault(); showSection(homeSection); });
+
+
+        // --- ORDER LOGIC ---
+        function listenToOrders() {
+            if (!currentUser) return;
+            const ordersList = document.getElementById('orders-list');
+            const ordersEmpty = document.getElementById('orders-empty');
+            
+            const q = query(collection(db, "orders"), where("userId", "==", currentUser.uid));
+
+            if (ordersUnsubscribe) ordersUnsubscribe();
+            
+            ordersUnsubscribe = onSnapshot(q, (querySnapshot) => {
+                if(querySnapshot.empty) {
+                     ordersList.innerHTML = '';
+                     ordersEmpty.classList.remove('hidden');
+                     return;
+                }
+                
+                ordersEmpty.classList.add('hidden');
+                ordersList.innerHTML = '';
+                querySnapshot.docs.sort((a, b) => b.data().createdAt.seconds - a.data().createdAt.seconds).forEach((doc) => {
+                    const order = doc.data();
+                    const orderId = doc.id;
+                    const orderCard = document.createElement('div');
+                    orderCard.className = 'bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md space-y-4';
+                    orderCard.id = `order-${orderId}`;
+                    
+                    const statuses = ["Order Placed", "Preparing", "Out for Delivery", "Delivered"];
+                    const currentStatusIndex = statuses.indexOf(order.status || "Order Placed");
+
+                    let progressStepsHTML = statuses.map((status, index) => `
+                        <div class="progress-step ${index <= currentStatusIndex ? 'active' : ''}">
+                           <div class="progress-dot"></div>
+                           <p class="text-xs dark:text-gray-400">${status}</p>
+                        </div>
+                    `).join('');
+                    
+                    let itemsHTML = order.items.map(item => `
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="dark:text-gray-300">${item.name} <span class="text-gray-500 dark:text-gray-400">x ${item.quantity}</span></span>
+                            <span class="dark:text-gray-400">₹${(item.price * item.quantity).toFixed(2)}</span>
+                        </div>
+                    `).join('');
+
+                    orderCard.innerHTML = `
+                        <div class="flex flex-col sm:flex-row justify-between sm:items-center">
+                            <div>
+                                <p class="font-semibold text-lg dark:text-white">Order #${orderId.substring(0, 8)}</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">${new Date(order.createdAt.seconds * 1000).toLocaleString()}</p>
+                            </div>
+                            <div class="text-left sm:text-right mt-2 sm:mt-0">
+                                <p class="font-bold text-xl dark:text-white">₹${order.total.toFixed(2)}</p>
+                                <button onclick="toggleOrderDetails('${orderId}')" class="text-sm text-orange-600 hover:underline">View Details</button>
+                            </div>
+                        </div>
+                        <div class="pt-4">
+                            <div class="progress-bar">
+                                <div class="progress-indicator" style="width: ${(currentStatusIndex / (statuses.length - 1)) * 100}%;"></div>
+                                ${progressStepsHTML}
+                            </div>
+                        </div>
+                         <div id="details-${orderId}" class="order-details border-t dark:border-gray-700 pt-4 mt-4 space-y-2">
+                            <h4 class="font-semibold dark:text-white">Items in this order:</h4>
+                            ${itemsHTML}
+                        </div>
+                    `;
+                    ordersList.appendChild(orderCard);
+                });
+            });
+        }
+
+        async function simulateOrderProgress(orderId) {
+            const orderRef = doc(db, "orders", orderId);
+            const statuses = ["Preparing", "Out for Delivery", "Delivered"];
+            let i = 0;
+
+            const interval = setInterval(async () => {
+                if (i < statuses.length) {
+                    await updateDoc(orderRef, { status: statuses[i] });
+                    i++;
+                } else {
+                    clearInterval(interval);
+                }
+            }, 7000); // 7 seconds per step
+        }
+
+        document.getElementById('checkout-btn').addEventListener('click', async () => {
+             if (cart.length > 0 && currentUser) {
+                try {
+                    const newOrderRef = await addDoc(collection(db, "orders"), {
+                        userId: currentUser.uid,
+                        items: cart,
+                        total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+                        createdAt: new Date(),
+                        status: "Order Placed"
+                    });
+                    
+                    simulateOrderProgress(newOrderRef.id);
+
+                    cart = [];
+                    await saveCartToFirestore();
+                    updateCartUI();
+                    showToast('Order placed successfully!');
+                    cartSidebar.classList.add('translate-x-full');
+                } catch (e) {
+                    console.error("Error adding document: ", e);
+                    showToast('There was an error placing your order.', true);
+                }
+            }
+        });
+
+        // --- PROFILE LOGIC ---
+        async function loadUserProfile() {
+            if (currentUser) {
+                const userDocRef = doc(db, "users", currentUser.uid);
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists()) {
+                    const userData = docSnap.data();
+                    document.getElementById('profile-name').value = userData.name || '';
+                    document.getElementById('profile-email').value = userData.email || '';
+                    document.getElementById('profile-address').value = userData.address || '';
+
+                    document.getElementById('profile-display-name').textContent = userData.name || 'User';
+                    const creationDate = new Date(currentUser.metadata.creationTime).toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+                    document.getElementById('profile-member-since').textContent = `Member since ${creationDate}`;
+                }
+            }
+        }
+        
+        const handleProfileUpdate = async () => {
+             const newName = document.getElementById('profile-name').value;
+             const newAddress = document.getElementById('profile-address').value;
+             if(currentUser) {
+                const userDocRef = doc(db, "users", currentUser.uid);
+                try {
+                    await updateDoc(userDocRef, {
+                        name: newName,
+                        address: newAddress
+                    });
+                    document.getElementById('profile-display-name').textContent = newName;
+                    showToast("Profile updated successfully!");
+                } catch(error) {
+                    showToast("Error updating profile.", true);
+                }
+             }
+        };
+
+        // --- ITEM DETAIL MODAL LOGIC & REVIEWS ---
+        const itemDetailModal = document.getElementById('item-detail-modal');
+        const modalContentBody = document.getElementById('modal-content-body');
+        
+        async function showItemDetail(itemId) {
+            const item = foodItems.find(i => i.id === itemId);
+            
+            // Fetch reviews for this item
+            const reviewsQuery = query(collection(db, "reviews"), where("itemId", "==", itemId));
+            const reviewsSnapshot = await getDocs(reviewsQuery);
+            let reviews = [];
+            let totalRating = 0;
+            reviewsSnapshot.forEach(doc => {
+                reviews.push(doc.data());
+                totalRating += doc.data().rating;
+            });
+            const averageRating = reviews.length > 0 ? (totalRating / reviews.length).toFixed(1) : 'No reviews yet';
+            
+            // Check if user has purchased this item before
+            let hasPurchased = false;
+            if(currentUser) {
+                const ordersQuery = query(collection(db, "orders"), where("userId", "==", currentUser.uid));
+                const ordersSnapshot = await getDocs(ordersQuery);
+                ordersSnapshot.forEach(doc => {
+                    const order = doc.data();
+                    if(order.items.some(orderItem => orderItem.id === itemId)){
+                        hasPurchased = true;
+                    }
+                });
+            }
+
+            // Generate HTML for stars
+            const renderStars = (rating) => {
+                let stars = '';
+                for(let i = 1; i <= 5; i++){
+                    stars += `<svg class="w-5 h-5 ${i <= rating ? 'text-amber-500' : 'text-gray-300 dark:text-gray-600'}" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>`;
+                }
+                return stars;
+            };
+
+            let reviewsHTML = reviews.map(review => `
+                <div class="border-t dark:border-gray-700 pt-4 mt-4">
+                    <div class="flex items-center mb-2">
+                        ${renderStars(review.rating)}
+                        <p class="ml-2 font-semibold dark:text-white">${review.userName}</p>
+                    </div>
+                    <p class="text-gray-600 dark:text-gray-400">${review.text}</p>
+                </div>
+            `).join('');
+            if(reviews.length === 0) reviewsHTML = '<p class="text-sm text-gray-500 dark:text-gray-400 mt-4">No reviews yet for this item.</p>';
+            
+            let reviewFormHTML = '';
+            if(hasPurchased) {
+                reviewFormHTML = `
+                <div class="border-t dark:border-gray-700 pt-4 mt-6">
+                    <h4 class="text-lg font-semibold dark:text-white mb-2">Leave a Review</h4>
+                    <form onsubmit="event.preventDefault(); handleReviewSubmit(${itemId});">
+                        <div class="flex items-center mb-2 star-rating flex-row-reverse justify-end">
+                            <input type="radio" id="star5" name="rating" value="5" /><label for="star5" title="5 stars" class="text-2xl">★</label>
+                            <input type="radio" id="star4" name="rating" value="4" /><label for="star4" title="4 stars" class="text-2xl">★</label>
+                            <input type="radio" id="star3" name="rating" value="3" /><label for="star3" title="3 stars" class="text-2xl">★</label>
+                            <input type="radio" id="star2" name="rating" value="2" /><label for="star2" title="2 stars" class="text-2xl">★</label>
+                            <input type="radio" id="star1" name="rating" value="1" /><label for="star1" title="1 stars" class="text-2xl">★</label>
+                        </div>
+                        <textarea id="review-text" required rows="3" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 dark:text-white" placeholder="Share your thoughts..."></textarea>
+                        <button type="submit" class="mt-2 px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700">Submit Review</button>
+                    </form>
+                </div>
+                `;
+            }
+
+
+            modalContentBody.innerHTML = `
+                <img src="${item.image}" alt="${item.name}" class="w-full h-64 object-cover">
+                <div class="p-6">
+                    <h2 class="text-3xl font-bold mb-2 dark:text-white">${item.name}</h2>
+                    <div class="flex items-center mb-4">
+                        <div class="flex items-center">
+                           ${renderStars(Math.round(averageRating))}
+                        </div>
+                        <p class="ml-2 text-sm text-gray-600 dark:text-gray-400">${averageRating} (${reviews.length} reviews)</p>
+                    </div>
+                    <p class="text-gray-700 dark:text-gray-300 mb-6">${item.description}</p>
+                    <div class="flex justify-between items-center">
+                        <span class="text-2xl font-bold dark:text-white">₹${item.price.toFixed(2)}</span>
+                        <button id="modal-add-to-cart" class="px-6 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700">Add to Cart</button>
+                    </div>
+                    <div class="mt-6">
+                        <h3 class="text-xl font-bold dark:text-white mb-2">Reviews</h3>
+                        ${reviewsHTML}
+                        ${reviewFormHTML}
+                    </div>
+                </div>
+            `;
+            document.getElementById('modal-add-to-cart').addEventListener('click', (event) => {
+                addToCart(item.id, event);
+                itemDetailModal.classList.add('hidden');
+                itemDetailModal.classList.remove('flex');
+            });
+            itemDetailModal.classList.remove('hidden');
+            itemDetailModal.classList.add('flex');
+            itemDetailModal.classList.add('modal-visible');
+        }
+
+        const handleReviewSubmit = async (itemId) => {
+            const ratingInput = document.querySelector('input[name="rating"]:checked');
+            if (!ratingInput) {
+                showToast("Please select a star rating.", true);
+                return;
+            }
+            const rating = ratingInput.value;
+            const text = document.getElementById('review-text').value;
+
+            if (!text) {
+                showToast("Please provide a review text.", true);
+                return;
+            }
+
+            const userDocRef = doc(db, "users", currentUser.uid);
+            const userDoc = await getDoc(userDocRef);
+            const userName = userDoc.data().name;
+
+            try {
+                await addDoc(collection(db, "reviews"), {
+                    itemId: itemId,
+                    userId: currentUser.uid,
+                    userName: userName,
+                    rating: parseInt(rating),
+                    text: text,
+                    createdAt: serverTimestamp()
+                });
+                showToast("Thank you for your review!");
+                // Refresh the modal to show the new review
+                showItemDetail(itemId);
+            } catch (error) {
+                showToast("There was an error submitting your review.", true);
+            }
+        };
+
+        itemDetailModal.addEventListener('click', (e) => {
+            if (e.target === itemDetailModal) {
+                 itemDetailModal.classList.add('hidden');
+                 itemDetailModal.classList.remove('flex');
+                 itemDetailModal.classList.remove('modal-visible');
+            }
+        });
+
+        // --- HELPER FUNCTIONS ---
+        function renderSkeletonLoaders(containerId, count) {
+             const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            for (let i = 0; i < count; i++) {
+                const skeleton = document.createElement('div');
+                if (containerId === 'food-items-grid') {
+                    skeleton.className = 'skeleton-card h-72';
+                } else {
+                    skeleton.className = 'skeleton-card h-16 w-full';
+                }
+                container.appendChild(skeleton);
+            }
+        }
+        function showToast(message, isError = false) {
+             const toast = document.getElementById('toast-notification');
+            toast.textContent = message;
+            
+            toast.classList.remove('bg-green-500', 'bg-red-500');
+            toast.classList.add(isError ? 'bg-red-500' : 'bg-green-500');
+            
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+        
+        function toggleOrderDetails(orderId) {
+            const detailsDiv = document.getElementById(`details-${orderId}`);
+            const button = event.target;
+            if (detailsDiv.style.maxHeight) {
+                detailsDiv.style.maxHeight = null;
+                button.textContent = 'View Details';
+            } else {
+                detailsDiv.style.maxHeight = detailsDiv.scrollHeight + "px";
+                button.textContent = 'Hide Details';
+            }
+        }
+
+        
+        // --- Make functions globally accessible for inline onclick handlers ---
+        window.handleLogin = handleLogin;
+        window.handleSignup = handleSignup;
+        window.handlePasswordReset = handlePasswordReset;
+        window.handleDecreaseItem = decreaseCartItem;
+        window.handleIncreaseItem = addToCart;
+        window.handleRemoveItem = removeCartItem;
+        window.handleProfileUpdate = handleProfileUpdate;
+        window.showItemDetail = showItemDetail;
+        window.handleReviewSubmit = handleReviewSubmit;
+        window.toggleOrderDetails = toggleOrderDetails;
+    </script>
+</body>
+</html>
+
